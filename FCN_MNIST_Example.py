@@ -1,8 +1,8 @@
-from Surface.sequential import Sequential
-from Surface.layers import Dense
-from Surface.activations import ReLU, Softmax
-from Surface.optimizers import Adam
-from Surface.losses import CategoricalCrossentropy
+from surface.sequential import Sequential
+from surface.layers import Dense
+from surface.activations import ReLU, Softmax
+from surface.optimizers import Adam
+from surface.losses import CategoricalCrossentropy
 from keras.utils import to_categorical
 from keras.datasets import mnist
 

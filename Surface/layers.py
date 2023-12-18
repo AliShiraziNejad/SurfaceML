@@ -1,4 +1,4 @@
-from initializations import glorot_uniform, glorot_normal, he_uniform, he_normal
+from surface.initializations import glorot_uniform, glorot_normal, he_uniform, he_normal
 import numpy as np
 
 

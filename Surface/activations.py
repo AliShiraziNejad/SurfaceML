@@ -1,4 +1,4 @@
-from layers import Layer
+from surface.layers import Layer
 import numpy as np
 
 
