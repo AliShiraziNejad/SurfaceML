@@ -74,6 +74,7 @@ class HuberLoss:
     def __init__(self, delta=1.0):
         self.delta = delta
 
+    @staticmethod
     def loss(self, y_true, y_pred):
         error = y_true - y_pred
         is_small_error = np.abs(error) < self.delta
@@ -81,6 +82,7 @@ class HuberLoss:
         linear_loss = self.delta * (np.abs(error) - 0.5 * self.delta)
         return np.where(is_small_error, squared_loss, linear_loss)
 
+    @staticmethod
     def gradient(self, y_true, y_pred):
         error = y_true - y_pred
         return np.where(np.abs(error) < self.delta, error, np.sign(error) * self.delta)
