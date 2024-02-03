@@ -1,9 +1,10 @@
-from surface.layers import Layer
+from surface.simple.layers import Layer
 import numpy as np
 
 
 class Activation(Layer):
     def __init__(self, activation, activation_prime):
+        super().__init__()
         self.activation = activation
         self.activation_prime = activation_prime
 
