@@ -51,5 +51,3 @@ def log_softmax(x, axis=None):
     log_softmax_x = x_shifted - log_sum_exp
 
     return log_softmax_x
-
-

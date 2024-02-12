@@ -84,9 +84,9 @@ class RMSProp:
             self.sq_grad_biases[layer_id] = np.zeros_like(biases)
 
         self.sq_grad_weights[layer_id] = self.rho * self.sq_grad_weights[layer_id] + (1 - self.rho) * (
-                    weights_gradient ** 2)
+                weights_gradient ** 2)
         self.sq_grad_biases[layer_id] = self.rho * self.sq_grad_biases[layer_id] + (1 - self.rho) * (
-                    biases_gradient ** 2)
+                biases_gradient ** 2)
 
         weights -= self.learning_rate * weights_gradient / (np.sqrt(self.sq_grad_weights[layer_id]) + self.epsilon)
         biases -= self.learning_rate * biases_gradient / (np.sqrt(self.sq_grad_biases[layer_id]) + self.epsilon)
