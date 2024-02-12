@@ -1,6 +1,5 @@
 import numpy as np
 
-
 class Sequential:
     def __init__(self):
         self.layers = []
@@ -17,11 +16,15 @@ class Sequential:
         for layer in reversed(self.layers):
             output_gradient = layer.backward(output_gradient, learning_rate)
 
-    def train(self, x_train, y_train, epochs, loss_function, optimizer, batch_size=32, x_test=None, y_test=None):
+    def train(self, x_train, y_train, epochs, loss_function, optimizer, batch_size=32, validation_data=None, shuffle=True):
         for epoch in range(epochs):
-            permutation = np.random.permutation(x_train.shape[0])
-            x_train_shuffled = x_train[permutation]
-            y_train_shuffled = y_train[permutation]
+            if shuffle:
+                permutation = np.random.permutation(x_train.shape[0])
+                x_train_shuffled = x_train[permutation]
+                y_train_shuffled = y_train[permutation]
+            else:
+                x_train_shuffled = x_train
+                y_train_shuffled = y_train
 
             total_loss = 0
             correct_predictions = 0
@@ -49,11 +52,11 @@ class Sequential:
             epoch_loss = total_loss / (x_train.shape[0] / batch_size)
             epoch_accuracy = correct_predictions / x_train.shape[0]
 
-            if x_test is not None and y_test is not None:
-                test_output = self.forward(x_test)
-                test_loss = loss_function.loss(y_test, test_output)
+            if validation_data is not None:
+                test_output = self.forward(validation_data[0])
+                test_loss = loss_function.loss(validation_data[1], test_output)
                 test_predictions = np.argmax(test_output, axis=1)
-                test_labels = np.argmax(y_test, axis=1)
+                test_labels = np.argmax(validation_data[1], axis=1)
                 test_accuracy = np.mean(test_predictions == test_labels)
 
                 print(f"Epoch {epoch + 1}/{epochs}, "

@@ -30,8 +30,9 @@ if __name__ == "__main__":
 
     # Train the model
     model.train(x_train=x_train, y_train=y_train,
-                x_test=x_test, y_test=y_test,
+                validation_data=(x_test, y_test),
                 epochs=10,
                 loss_function=loss_function,
                 optimizer=optimizer,
-                batch_size=32)
+                batch_size=32,
+                shuffle=True)
