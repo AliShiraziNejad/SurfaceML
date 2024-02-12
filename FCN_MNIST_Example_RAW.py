@@ -5,6 +5,8 @@ from keras.datasets import mnist
 
 from einops import rearrange
 
+from scipy.stats import truncnorm
+
 
 class Sequential:
     def __init__(self):
@@ -22,11 +24,15 @@ class Sequential:
         for layer in reversed(self.layers):
             output_gradient = layer.backward(output_gradient, learning_rate)
 
-    def train(self, x_train, y_train, epochs, loss_function, optimizer, batch_size=32, x_test=None, y_test=None):
+    def train(self, x_train, y_train, epochs, loss_function, optimizer, batch_size=32, validation_data=None, shuffle=True):
         for epoch in range(epochs):
-            permutation = np.random.permutation(x_train.shape[0])
-            x_train_shuffled = x_train[permutation]
-            y_train_shuffled = y_train[permutation]
+            if shuffle:
+                permutation = np.random.permutation(x_train.shape[0])
+                x_train_shuffled = x_train[permutation]
+                y_train_shuffled = y_train[permutation]
+            else:
+                x_train_shuffled = x_train
+                y_train_shuffled = y_train
 
             total_loss = 0
             correct_predictions = 0
@@ -54,11 +60,11 @@ class Sequential:
             epoch_loss = total_loss / (x_train.shape[0] / batch_size)
             epoch_accuracy = correct_predictions / x_train.shape[0]
 
-            if x_test is not None and y_test is not None:
-                test_output = self.forward(x_test)
-                test_loss = loss_function.loss(y_test, test_output)
+            if validation_data is not None:
+                test_output = self.forward(validation_data[0])
+                test_loss = loss_function.loss(validation_data[1], test_output)
                 test_predictions = np.argmax(test_output, axis=1)
-                test_labels = np.argmax(y_test, axis=1)
+                test_labels = np.argmax(validation_data[1], axis=1)
                 test_accuracy = np.mean(test_predictions == test_labels)
 
                 print(f"Epoch {epoch + 1}/{epochs}, "
@@ -112,6 +118,16 @@ def he_normal(shape):
     fan_in, _ = calculate_fan_in_fan_out(shape)
     stddev = np.sqrt(2 / fan_in)
     return np.random.normal(0, stddev, size=shape)
+
+
+def trunc_norm(shape, mean=0.0, stddev=None, lower=-2.0, upper=2.0):
+    fan_in, _ = calculate_fan_in_fan_out(shape)
+    if stddev is None:
+        stddev = np.sqrt(1. / fan_in)  # He initialization strategy
+    lower_bound = (lower - mean) / stddev
+    upper_bound = (upper - mean) / stddev
+    distribution = truncnorm(a=lower_bound, b=upper_bound, loc=mean, scale=stddev)
+    return distribution.rvs(size=shape)
 
 
 class Activation(Layer):
@@ -251,8 +267,9 @@ if __name__ == "__main__":
 
     # Train the model
     model.train(x_train=x_train, y_train=y_train,
-                x_test=x_test, y_test=y_test,
+                validation_data=(x_test, y_test),
                 epochs=10,
                 loss_function=loss_function,
                 optimizer=optimizer,
-                batch_size=32)
+                batch_size=32,
+                shuffle=True)
