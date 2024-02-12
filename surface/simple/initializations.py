@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.stats import truncnorm
 
 
 def calculate_fan_in_fan_out(shape):
@@ -33,3 +34,13 @@ def he_normal(shape):
     fan_in, _ = calculate_fan_in_fan_out(shape)
     stddev = np.sqrt(2 / fan_in)
     return np.random.normal(0, stddev, size=shape)
+
+
+def trunc_norm(shape, mean=0.0, stddev=None, lower=-2.0, upper=2.0):
+    fan_in, _ = calculate_fan_in_fan_out(shape)
+    if stddev is None:
+        stddev = np.sqrt(1. / fan_in)  # He initialization strategy
+    lower_bound = (lower - mean) / stddev
+    upper_bound = (upper - mean) / stddev
+    distribution = truncnorm(a=lower_bound, b=upper_bound, loc=mean, scale=stddev)
+    return distribution.rvs(size=shape)
