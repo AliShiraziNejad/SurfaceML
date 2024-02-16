@@ -36,13 +36,23 @@ class BinaryCrossentropy:
 
 
 class CategoricalCrossentropy:
-    @staticmethod
-    def loss(y_true, y_pred):
+    def __init__(self, from_logits=False):
+        self.from_logits = from_logits
+
+    def loss(self, y_true, y_pred):
+        if self.from_logits:
+            y_pred = self.softmax(y_pred)
         return -np.sum(y_true * np.log(y_pred + 1e-9)) / y_true.shape[0]
 
-    @staticmethod
-    def gradient(y_true, y_pred):
+    def gradient(self, y_true, y_pred):
+        if self.from_logits:
+            y_pred = self.softmax(y_pred)
         return y_pred - y_true
+
+    @staticmethod
+    def softmax(x):
+        exps = np.exp(x - np.max(x, axis=1, keepdims=True))
+        return exps / np.sum(exps, axis=1, keepdims=True)
 
 
 class SparseCategoricalCrossentropy:

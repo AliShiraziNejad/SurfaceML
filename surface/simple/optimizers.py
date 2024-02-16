@@ -35,6 +35,9 @@ class Adam:
         biases -= self.learning_rate * m_hat_biases / (np.sqrt(v_hat_biases) + self.epsilon)
 
     def reset(self):
+        """
+        Not used for sequential class training!
+        """
         self.m_weights.clear()
         self.v_weights.clear()
         self.m_biases.clear()

@@ -12,7 +12,7 @@ class Activation(Layer):
         self.input = input_data
         return self.activation(self.input)
 
-    def backward(self, output_gradient, learning_rate):
+    def backward(self, output_gradient):
         return self.activation_prime(self.input) * output_gradient
 
 
@@ -37,9 +37,6 @@ class Softmax(Activation):
             return np.ones_like(x)
 
         super().__init__(softmax, softmax_prime)
-
-    def backward(self, output_gradient, learning_rate):
-        return output_gradient
 
 
 class Tanh(Activation):

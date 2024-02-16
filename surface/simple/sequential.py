@@ -13,26 +13,26 @@ class Sequential:
             input_data = layer.forward(input_data)
         return input_data
 
-    def backward(self, output_gradient, learning_rate):
+    def backward(self, output_gradient):
         for layer in reversed(self.layers):
-            output_gradient = layer.backward(output_gradient, learning_rate)
+            output_gradient = layer.backward(output_gradient)
 
     def train(self, x_train, y_train, epochs, loss_function, optimizer, batch_size=32, validation_data=None, shuffle=True):
         for epoch in range(epochs):
             if shuffle:
                 permutation = np.random.permutation(x_train.shape[0])
-                x_train_shuffled = x_train[permutation]
-                y_train_shuffled = y_train[permutation]
+                x_train_set = x_train[permutation]
+                y_train_set = y_train[permutation]
             else:
-                x_train_shuffled = x_train
-                y_train_shuffled = y_train
+                x_train_set = x_train
+                y_train_set = y_train
 
             total_loss = 0
             correct_predictions = 0
 
             for i in range(0, x_train.shape[0], batch_size):
-                x_batch = x_train_shuffled[i:i + batch_size]
-                y_batch = y_train_shuffled[i:i + batch_size]
+                x_batch = x_train_set[i:i + batch_size]
+                y_batch = y_train_set[i:i + batch_size]
 
                 output = self.forward(x_batch)
                 loss = loss_function.loss(y_batch, output)
@@ -43,7 +43,7 @@ class Sequential:
                 correct_predictions += np.sum(predictions == labels)
 
                 output_gradient = loss_function.gradient(y_batch, output)
-                self.backward(output_gradient, optimizer.learning_rate)
+                self.backward(output_gradient)
 
                 for layer_id, layer in enumerate(self.layers):
                     if hasattr(layer, 'weights'):
