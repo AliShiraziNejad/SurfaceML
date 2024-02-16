@@ -1,11 +1,21 @@
 import numpy as np
 
 from keras.utils import to_categorical
-from keras.datasets import mnist
+from keras.datasets import cifar10, mnist
 
 from einops import rearrange
 
 from scipy.stats import truncnorm
+
+import tensorflow as tf
+import random
+import os
+
+seed_value = 42
+os.environ['PYTHONHASHSEED'] = str(seed_value)
+random.seed(seed_value)
+np.random.seed(seed_value)
+tf.random.set_seed(seed_value)
 
 
 class Sequential:
@@ -20,26 +30,26 @@ class Sequential:
             input_data = layer.forward(input_data)
         return input_data
 
-    def backward(self, output_gradient, learning_rate):
+    def backward(self, output_gradient):
         for layer in reversed(self.layers):
-            output_gradient = layer.backward(output_gradient, learning_rate)
+            output_gradient = layer.backward(output_gradient)
 
     def train(self, x_train, y_train, epochs, loss_function, optimizer, batch_size=32, validation_data=None, shuffle=True):
         for epoch in range(epochs):
             if shuffle:
                 permutation = np.random.permutation(x_train.shape[0])
-                x_train_shuffled = x_train[permutation]
-                y_train_shuffled = y_train[permutation]
+                x_train_set = x_train[permutation]
+                y_train_set = y_train[permutation]
             else:
-                x_train_shuffled = x_train
-                y_train_shuffled = y_train
+                x_train_set = x_train
+                y_train_set = y_train
 
             total_loss = 0
             correct_predictions = 0
 
             for i in range(0, x_train.shape[0], batch_size):
-                x_batch = x_train_shuffled[i:i + batch_size]
-                y_batch = y_train_shuffled[i:i + batch_size]
+                x_batch = x_train_set[i:i + batch_size]
+                y_batch = y_train_set[i:i + batch_size]
 
                 output = self.forward(x_batch)
                 loss = loss_function.loss(y_batch, output)
@@ -50,7 +60,7 @@ class Sequential:
                 correct_predictions += np.sum(predictions == labels)
 
                 output_gradient = loss_function.gradient(y_batch, output)
-                self.backward(output_gradient, optimizer.learning_rate)
+                self.backward(output_gradient)
 
                 for layer_id, layer in enumerate(self.layers):
                     if hasattr(layer, 'weights'):
@@ -82,7 +92,7 @@ class Layer:
     def forward(self, input):
         raise NotImplementedError
 
-    def backward(self, output_gradient, learning_rate):
+    def backward(self, output_gradient):
         raise NotImplementedError
 
 
@@ -140,7 +150,7 @@ class Activation(Layer):
         self.input = input_data
         return self.activation(self.input)
 
-    def backward(self, output_gradient, learning_rate):
+    def backward(self, output_gradient):
         return self.activation_prime(self.input) * output_gradient
 
 
@@ -166,9 +176,6 @@ class Softmax(Activation):
 
         super().__init__(softmax, softmax_prime)
 
-    def backward(self, output_gradient, learning_rate):
-        return output_gradient
-
 
 class Dense(Layer):
     def __init__(self, input_size, output_size, initialization='glorot_uniform'):
@@ -181,6 +188,8 @@ class Dense(Layer):
             self.weights = he_uniform((input_size, output_size))
         elif initialization == 'he_normal':
             self.weights = he_normal((input_size, output_size))
+        elif initialization == 'trunc_norm':
+            self.weights = trunc_norm((input_size, output_size))
         else:
             raise ValueError("Invalid initialization method")
         self.bias = np.zeros(output_size)
@@ -189,7 +198,7 @@ class Dense(Layer):
         self.input = input_data
         return np.dot(self.input, self.weights) + self.bias
 
-    def backward(self, output_gradient, learning_rate):
+    def backward(self, output_gradient):
         self.weights_gradient = np.dot(self.input.T, output_gradient)
         self.bias_gradient = np.mean(output_gradient, axis=0)
         input_gradient = np.dot(output_gradient, self.weights.T)
@@ -230,6 +239,9 @@ class Adam:
         biases -= self.learning_rate * m_hat_biases / (np.sqrt(v_hat_biases) + self.epsilon)
 
     def reset(self):
+        """
+        Not used for sequential class training!
+        """
         self.m_weights.clear()
         self.v_weights.clear()
         self.m_biases.clear()
@@ -237,16 +249,29 @@ class Adam:
 
 
 class CategoricalCrossentropy:
-    @staticmethod
-    def loss(y_true, y_pred):
+    def __init__(self, from_logits=False):
+        self.from_logits = from_logits
+
+    def loss(self, y_true, y_pred):
+        if self.from_logits:
+            y_pred = self.softmax(y_pred)
         return -np.sum(y_true * np.log(y_pred + 1e-9)) / y_true.shape[0]
 
-    @staticmethod
-    def gradient(y_true, y_pred):
+    def gradient(self, y_true, y_pred):
+        if self.from_logits:
+            y_pred = self.softmax(y_pred)
         return y_pred - y_true
+
+    def softmax(self, x):
+        exps = np.exp(x - np.max(x, axis=1, keepdims=True))
+        return exps / np.sum(exps, axis=1, keepdims=True)
 
 
 if __name__ == "__main__":
+    # (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+    # x_train = rearrange(x_train, 'batch height weight channels -> batch (height weight channels)').astype('float32') / 255
+    # x_test = rearrange(x_test, 'batch height weight channels -> batch (height weight channels)').astype('float32') / 255
+
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
     x_train = rearrange(x_train, 'batch height weight -> batch (height weight)').astype('float32') / 255
     x_test = rearrange(x_test, 'batch height weight -> batch (height weight)').astype('float32') / 255
@@ -255,11 +280,11 @@ if __name__ == "__main__":
     y_test = to_categorical(y_test, 10)
 
     model = Sequential()
-    model.add(Dense(784, 128, initialization='glorot_normal'))
+    model.add(Dense(x_train.shape[1], 128, initialization='he_normal'))
     model.add(ReLU())
-    model.add(Dense(128, 128, initialization='glorot_normal'))
+    model.add(Dense(128, 128, initialization='he_normal'))
     model.add(ReLU())
-    model.add(Dense(128, 10, initialization='glorot_normal'))
+    model.add(Dense(128, y_train.shape[1], initialization='he_normal'))
     model.add(Softmax())
 
     optimizer = Adam()
@@ -268,8 +293,8 @@ if __name__ == "__main__":
     # Train the model
     model.train(x_train=x_train, y_train=y_train,
                 validation_data=(x_test, y_test),
-                epochs=10,
+                epochs=50,
                 loss_function=loss_function,
                 optimizer=optimizer,
-                batch_size=32,
+                batch_size=256,
                 shuffle=True)
