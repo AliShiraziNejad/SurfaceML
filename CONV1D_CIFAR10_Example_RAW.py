@@ -205,6 +205,80 @@ class Dense(Layer):
         return input_gradient
 
 
+class Conv1D(Layer):
+    def __init__(self, input_channels, output_channels, kernel_size, stride=1, initialization='glorot_uniform'):
+        super().__init__()
+        self.input_channels = input_channels
+        self.output_channels = output_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+
+        if initialization == 'glorot_uniform':
+            self.weights = glorot_uniform((output_channels, input_channels, kernel_size))
+        elif initialization == 'glorot_normal':
+            self.weights = glorot_normal((output_channels, input_channels, kernel_size))
+        elif initialization == 'he_uniform':
+            self.weights = he_uniform((output_channels, input_channels, kernel_size))
+        elif initialization == 'he_normal':
+            self.weights = he_normal((output_channels, input_channels, kernel_size))
+        elif initialization == 'trunc_norm':
+            self.weights = trunc_norm((output_channels, input_channels, kernel_size))
+        else:
+            raise ValueError("Invalid initialization method")
+        self.bias = np.zeros(output_channels)
+
+    def forward(self, input_data):
+        self.input = input_data
+        batch_size, channels, width = input_data.shape
+        out_width = (width - self.kernel_size) // self.stride + 1
+
+        output = np.zeros((batch_size, self.output_channels, out_width))
+
+        for i in range(out_width):
+            start_i = i * self.stride
+            end_i = start_i + self.kernel_size
+            output[:, :, i] = np.tensordot(input_data[:, :, start_i:end_i], self.weights, axes=([1, 2], [1, 2])) + self.bias
+
+        self.output = output
+        return output
+
+    def backward(self, output_gradient):
+        batch_size, channels, width = self.input.shape
+        _, _, out_width = output_gradient.shape
+        self.weights_gradient = np.zeros_like(self.weights)
+        self.bias_gradient = np.zeros_like(self.bias)
+        input_gradient = np.zeros_like(self.input)
+
+        for i in range(out_width):
+            start_i = i * self.stride
+            end_i = start_i + self.kernel_size
+            self.weights_gradient += np.tensordot(output_gradient[:, :, i], self.input[:, :, start_i:end_i], axes=([0], [0]))
+            self.bias_gradient += output_gradient[:, :, i].sum(axis=0)
+            input_gradient[:, :, start_i:end_i] += np.tensordot(output_gradient[:, :, i], self.weights, axes=([1], [0]))
+
+        return input_gradient
+
+
+class Flatten(Layer):
+    def forward(self, input_data):
+        self.input_shape = input_data.shape
+        return input_data.reshape(input_data.shape[0], -1)
+
+    def backward(self, output_gradient):
+        return output_gradient.reshape(self.input_shape)
+
+
+class GlobalAveragePooling1D(Layer):
+    def forward(self, input_data):
+        self.input_shape = input_data.shape
+        return np.mean(input_data, axis=2, keepdims=False)
+
+    def backward(self, output_gradient):
+        n = self.input_shape[2]
+        input_gradient = np.repeat(output_gradient[:, :, np.newaxis], n, axis=2) / n
+        return input_gradient
+
+
 class Adam:
     def __init__(self, learning_rate=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-7):
         self.learning_rate = learning_rate
@@ -271,18 +345,26 @@ class CategoricalCrossentropy:
 if __name__ == "__main__":
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
 
+    x_train = x_train[:100].astype('float32') / 255
+    y_train = y_train[:100]
+    x_test = x_test[:100].astype('float32') / 255
+    y_test = y_test[:100]
+
+    x_train = rearrange(x_train, 'batch height width -> batch 1 (height width)')
+    x_test = rearrange(x_test, 'batch height width -> batch 1 (height width)')
+
     y_train = to_categorical(y_train, 10)
     y_test = to_categorical(y_test, 10)
 
-    x_train = rearrange(x_train, 'batch height weight -> batch (height weight)').astype('float32') / 255
-    x_test = rearrange(x_test, 'batch height weight -> batch (height weight)').astype('float32') / 255
-
     model = Sequential()
-    model.add(Dense(x_train.shape[1], 128, initialization='he_normal'))
+    model.add(Conv1D(input_channels=1, output_channels=32, kernel_size=3, stride=1, initialization='he_normal'))
     model.add(ReLU())
-    model.add(Dense(128, 128, initialization='he_normal'))
+    model.add(Conv1D(input_channels=32, output_channels=64, kernel_size=3, stride=1, initialization='he_normal'))
     model.add(ReLU())
-    model.add(Dense(128, y_train.shape[1], initialization='he_normal'))
+    model.add(GlobalAveragePooling1D())
+    model.add(Dense(64, 128, initialization='he_normal'))
+    model.add(ReLU())
+    model.add(Dense(128, 10, initialization='he_normal'))
     model.add(Softmax())
 
     optimizer = Adam()

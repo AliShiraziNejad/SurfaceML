@@ -205,6 +205,93 @@ class Dense(Layer):
         return input_gradient
 
 
+class Conv2D(Layer):
+    def __init__(self, input_channels, output_channels, kernel_size, stride=1, padding=0, initialization='glorot_uniform'):
+        super().__init__()
+        self.input_channels = input_channels
+        self.output_channels = output_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.initialization = initialization
+
+        kernel_shape = (output_channels, input_channels, kernel_size, kernel_size)
+
+        if initialization == 'glorot_uniform':
+            self.weights = glorot_uniform(kernel_shape)
+        elif initialization == 'glorot_normal':
+            self.weights = glorot_normal(kernel_shape)
+        elif initialization == 'he_uniform':
+            self.weights = he_uniform(kernel_shape)
+        elif initialization == 'he_normal':
+            self.weights = he_normal(kernel_shape)
+        elif initialization == 'trunc_norm':
+            self.weights = trunc_norm(kernel_shape)
+        else:
+            raise ValueError("Invalid initialization method")
+        self.bias = np.zeros(output_channels)
+
+    def forward(self, input_data):
+        self.input = np.pad(input_data, ((0, 0), (0, 0), (self.padding, self.padding), (self.padding, self.padding)), 'constant')
+        batch_size, _, input_height, input_width = self.input.shape
+        output_height = (input_height - self.kernel_size) // self.stride + 1
+        output_width = (input_width - self.kernel_size) // self.stride + 1
+
+        self.output = np.zeros((batch_size, self.output_channels, output_height, output_width))
+
+        for i in range(batch_size):
+            for j in range(self.output_channels):
+                for k in range(0, input_height - self.kernel_size + 1, self.stride):
+                    for l in range(0, input_width - self.kernel_size + 1, self.stride):
+                        self.output[i, j, k // self.stride, l // self.stride] = np.sum(
+                            self.input[i, :, k:k + self.kernel_size, l:l + self.kernel_size] * self.weights[j, :, :, :]
+                        ) + self.bias[j]
+
+        return self.output
+
+    def backward(self, output_gradient):
+        batch_size, _, input_height, input_width = self.input.shape
+        _, _, output_height, output_width = output_gradient.shape
+
+        self.weights_gradient = np.zeros_like(self.weights)
+        self.bias_gradient = np.zeros_like(self.bias)
+        input_gradient = np.zeros_like(self.input)
+
+        for i in range(batch_size):
+            for j in range(self.output_channels):
+                for k in range(output_height):
+                    for l in range(output_width):
+                        input_slice = self.input[i, :, k * self.stride:k * self.stride + self.kernel_size, l * self.stride:l * self.stride + self.kernel_size]
+                        self.weights_gradient[j, :, :, :] += output_gradient[i, j, k, l] * input_slice
+                        input_gradient[i, :, k * self.stride:k * self.stride + self.kernel_size, l * self.stride:l * self.stride + self.kernel_size] += output_gradient[i, j, k, l] * self.weights[j, :,
+                                                                                                                                                                                      :, :]
+                self.bias_gradient[j] += np.sum(output_gradient[i, j, :, :])
+
+        if self.padding > 0:
+            input_gradient = input_gradient[:, :, self.padding:-self.padding, self.padding:-self.padding]
+
+        return input_gradient
+
+
+class Flatten(Layer):
+    def forward(self, input_data):
+        self.input_shape = input_data.shape
+        return input_data.reshape(input_data.shape[0], -1)
+
+    def backward(self, output_gradient):
+        return output_gradient.reshape(self.input_shape)
+
+
+class GlobalAveragePooling2D(Layer):
+    def forward(self, input_data):
+        self.input_shape = input_data.shape
+        return np.mean(input_data, axis=(2, 3), keepdims=False)
+
+    def backward(self, output_gradient):
+        n, c, h, w = self.input_shape
+        return np.repeat(output_gradient[:, :, np.newaxis, np.newaxis], h * w).reshape(self.input_shape) / (h * w)
+
+
 class Adam:
     def __init__(self, learning_rate=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-7):
         self.learning_rate = learning_rate
@@ -269,20 +356,28 @@ class CategoricalCrossentropy:
 
 
 if __name__ == "__main__":
-    (x_train, y_train), (x_test, y_test) = mnist.load_data()
+    (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+
+    x_train = x_train[:100].astype('float32') / 255
+    y_train = y_train[:100]
+    x_test = x_test[:100].astype('float32') / 255
+    y_test = y_test[:100]
 
     y_train = to_categorical(y_train, 10)
     y_test = to_categorical(y_test, 10)
 
-    x_train = rearrange(x_train, 'batch height weight -> batch (height weight)').astype('float32') / 255
-    x_test = rearrange(x_test, 'batch height weight -> batch (height weight)').astype('float32') / 255
+    x_train = rearrange(x_train, 'batch height width channels -> batch channels height width')
+    x_test = rearrange(x_test, 'batch height width channels -> batch channels height width')
 
     model = Sequential()
-    model.add(Dense(x_train.shape[1], 128, initialization='he_normal'))
+    model.add(Conv2D(input_channels=3, output_channels=32, kernel_size=3, stride=1, padding=1, initialization='he_normal'))
     model.add(ReLU())
-    model.add(Dense(128, 128, initialization='he_normal'))
+    model.add(Conv2D(input_channels=32, output_channels=64, kernel_size=3, stride=1, padding=1, initialization='he_normal'))
     model.add(ReLU())
-    model.add(Dense(128, y_train.shape[1], initialization='he_normal'))
+    model.add(GlobalAveragePooling2D())
+    model.add(Dense(64, 128, initialization='he_normal'))
+    model.add(ReLU())
+    model.add(Dense(128, 10, initialization='he_normal'))
     model.add(Softmax())
 
     optimizer = Adam()
