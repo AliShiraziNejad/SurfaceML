@@ -271,11 +271,16 @@ class CategoricalCrossentropy:
 if __name__ == "__main__":
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
 
+    x_train = x_train[:100].astype('float32') / 255
+    y_train = y_train[:100]
+    x_test = x_test[:100].astype('float32') / 255
+    y_test = y_test[:100]
+
     y_train = to_categorical(y_train, 10)
     y_test = to_categorical(y_test, 10)
 
-    x_train = rearrange(x_train, 'batch height weight -> batch (height weight)').astype('float32') / 255
-    x_test = rearrange(x_test, 'batch height weight -> batch (height weight)').astype('float32') / 255
+    x_train = rearrange(x_train, 'batch height weight -> batch (height weight)')
+    x_test = rearrange(x_test, 'batch height weight -> batch (height weight)')
 
     model = Sequential()
     model.add(Dense(x_train.shape[1], 128, initialization='he_normal'))
