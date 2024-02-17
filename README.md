@@ -6,8 +6,10 @@ popular frameworks such as Keras, PyTorch, and Tensorflow work under the hood.
 
 The "**simple**" API is a replica of Tensorflow Keras API
 
+The "**raw**" directory contains scripts that house everything needed to make a Neural Network
+
 Currently NOT supported:
 - GPU / hardware-acceleration
 - Preprocessing
-- Autograd / Autodiff / Algorithmic differentiation
+- Autograd / Autodiff 
 - non-CNN/linear layers
